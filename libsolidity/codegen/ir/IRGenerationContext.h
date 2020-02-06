@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <libsolidity/codegen/ir/IRVariable.h>
 #include <libsolidity/interface/OptimiserSettings.h>
 
 #include <libsolidity/codegen/MultiUseYulFunctionCollector.h>
@@ -62,9 +63,11 @@ public:
 	}
 
 
-	std::string addLocalVariable(VariableDeclaration const& _varDecl);
+	IRVariable const& addFunctionParameter(VariableDeclaration const& _varDecl);
+
+	IRVariable const& addLocalVariable(VariableDeclaration const& _varDecl);
 	bool isLocalVariable(VariableDeclaration const& _varDecl) const { return m_localVariables.count(&_varDecl); }
-	std::string localVariableName(VariableDeclaration const& _varDecl);
+	IRVariable const& localVariable(VariableDeclaration const& _varDecl);
 
 	void addStateVariable(VariableDeclaration const& _varDecl, u256 _storageOffset, unsigned _byteOffset);
 	bool isStateVariable(VariableDeclaration const& _varDecl) const { return m_stateVariables.count(&_varDecl); }
@@ -79,11 +82,6 @@ public:
 	std::string virtualFunctionName(FunctionDefinition const& _functionDeclaration);
 
 	std::string newYulVariable();
-	/// @returns the variable (or comma-separated list of variables) that contain
-	/// the value of the given expression.
-	std::string variable(Expression const& _expression);
-	/// @returns the sub-variable of a multi-variable expression.
-	std::string variablePart(Expression const& _expression, std::string const& _part);
 
 	std::string internalDispatch(size_t _in, size_t _out);
 
@@ -96,7 +94,7 @@ private:
 	langutil::EVMVersion m_evmVersion;
 	OptimiserSettings m_optimiserSettings;
 	std::vector<ContractDefinition const*> m_inheritanceHierarchy;
-	std::map<VariableDeclaration const*, std::string> m_localVariables;
+	std::map<VariableDeclaration const*, IRVariable> m_localVariables;
 	/// Storage offsets of state variables
 	std::map<VariableDeclaration const*, std::pair<u256, unsigned>> m_stateVariables;
 	std::shared_ptr<MultiUseYulFunctionCollector> m_functions;
