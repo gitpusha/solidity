@@ -31,8 +31,12 @@
 
 #include <libevmasm/Assembly.h>
 #include <libevmasm/Instruction.h>
+#include <liblangutil/ErrorReporter.h>
 #include <liblangutil/EVMVersion.h>
 #include <libsolutil/Common.h>
+
+#include <libyul/AsmAnalysisInfo.h>
+#include <libyul/backends/evm/EVMDialect.h>
 
 #include <functional>
 #include <ostream>
@@ -218,6 +222,8 @@ public:
 		bool _system = false,
 		OptimiserSettings const& _optimiserSettings = OptimiserSettings::none()
 	);
+
+	void optimizeYul(yul::Object& _object, yul::EVMDialect const& _dialect, OptimiserSettings const& _optimiserSetting, std::set<yul::YulString> const& _externalIdentifiers = {});
 
 	/// Appends arbitrary data to the end of the bytecode.
 	void appendAuxiliaryData(bytes const& _data) { m_asm->appendAuxiliaryDataToEnd(_data); }
