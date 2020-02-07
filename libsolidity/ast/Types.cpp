@@ -2430,7 +2430,7 @@ vector<string> TupleType::makeStackSlotNames() const
 	{
 		if (t)
 			for (auto const& componentName: t->stackSlotNames())
-				slotNames.emplace_back(std::to_string(i) + (componentName.empty() ? "" : "_" + componentName));
+				slotNames.emplace_back("component_" + std::to_string(i) + (componentName.empty() ? "" : "_" + componentName));
 		++i;
 	}
 	return slotNames;
@@ -2929,7 +2929,7 @@ vector<string> FunctionType::makeStackSlotNames() const
 		names.emplace_back("salt");
 	if (bound())
 		for (auto const& boundName: m_parameterTypes.front()->stackSlotNames())
-			names.emplace_back("bound_" + boundName);
+			names.emplace_back("self_" + boundName);
 	return names;
 }
 
