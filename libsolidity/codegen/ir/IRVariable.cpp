@@ -48,6 +48,7 @@ IRVariable IRVariable::part(std::string const& _slot, Type const& _type) const
 }
 string IRVariable::part(std::string const& _slot) const
 {
+	solAssert(contains(m_type.stackSlotNames(), _slot), "Invalid stack slot name.");
 	if (_slot.empty())
 		return m_baseName;
 	else
@@ -64,9 +65,7 @@ vector<string> IRVariable::stackComponents() const
 
 string IRVariable::commaSeparatedList() const
 {
-	return joinHumanReadable(m_type.stackSlotNames() | boost::adaptors::transformed([&](std::string const& _slot){
-		return part(_slot);
-	}));
+	return joinHumanReadable(stackComponents());
 }
 
 string IRVariable::name() const
@@ -86,5 +85,5 @@ IRVariable IRVariable::tupleComponent(size_t _i) const
 	solAssert(_i < tupleType->components().size(), "Invalid tuple component requested.");
 	TypePointer component = tupleType->components().at(_i);
 	solUnimplementedAssert(component, "Placeholder tuple component requested.");
-	return IRVariable(*component, part(std::to_string(_i + 1)));
+	return IRVariable(*component, part("component_" + std::to_string(_i + 1)));
 }

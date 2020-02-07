@@ -14,6 +14,12 @@ contract C {
         (m[0], m[1], , m[2], m[0]) = (1, x, 3, 4, 42);
         return (m[2], m[1], m[0]);
     }
+    function i() public returns (uint a, uint b, uint c, uint d) {
+        (a) = 42;
+        (((((b))))) = 23;
+        c = (((17)));
+        (((d))) = (13);
+    }
 }
 // ====
 // compileViaYul: also
@@ -23,3 +29,4 @@ contract C {
 // x() -> 42
 // g() -> 3, 42, 1
 // h() -> 4, 42, 1
+// i() -> 42, 23, 17, 13
