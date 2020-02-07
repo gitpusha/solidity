@@ -54,6 +54,7 @@ install:
     - ps: $prerelease = "nightly."
     - ps: $prerelease += Get-Date -format "yyyy.M.d"
     - ps: if($env:appveyor_repo_branch -eq 'release') { Set-Content prerelease.txt $null } else { Set-Content prerelease.txt $prerelease }
+    - ps: if ($env:APPVEYOR_PULL_REQUEST_HEAD_COMMIT) { Set-Content commit_hash.txt $env:APPVEYOR_PULL_REQUEST_HEAD_COMMIT }
     - scripts/install_deps.bat
     - set ETHEREUM_DEPS_PATH=%APPVEYOR_BUILD_FOLDER%\deps\install
 before_build:
@@ -64,7 +65,11 @@ build_script:
     - msbuild solidity.sln /p:Configuration=%CONFIGURATION% /m:%NUMBER_OF_PROCESSORS% /v:minimal
     - cd %APPVEYOR_BUILD_FOLDER%
     - scripts\release.bat %CONFIGURATION% 2017
-    - ps: $bytecodedir = git show -s --format="%cd-%H" --date=short
+    - ps: $bytecodedir = if ($env:APPVEYOR_PULL_REQUEST_HEAD_COMMIT) {
+        git show -s --format="%cd-%H" --date=short $env:APPVEYOR_PULL_REQUEST_HEAD_COMMIT
+        } else {
+        git show -s --format="%cd-%H" --date=short
+        }
 
 test_script:
     - cd %APPVEYOR_BUILD_FOLDER%\build\test\%CONFIGURATION%
