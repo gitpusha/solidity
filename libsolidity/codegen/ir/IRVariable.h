@@ -40,9 +40,6 @@ public:
 	/// @returns the name of the variable, if it occupies a single stack slot (otherwise throws).
 	std::string name() const;
 
-	/// @returns a vector containing the names of the stack components of the variable.
-	std::vector<std::string> stackComponents() const;
-
 	/// @returns a comma-separated list of the stack components of the variable.
 	std::string commaSeparatedList() const;
 
@@ -52,13 +49,12 @@ public:
 	/// @returns the type of the variable.
 	Type const& type() const { return m_type; }
 
-	/// @returns The name of the stack component @a _slot of the variable.
-	std::string part(std::string const& _slot) const;
-
-	/// @returns a variable referring to the stack component @a _slot of the variable considering
-	/// it to be of type @a _type. Note: no type conversion is performed.
-	IRVariable part(std::string const& _slot, Type const& _type) const;
+	/// @returns a variable referring to the stack component @a _slot of the variable.
+	IRVariable part(std::string const& _slot) const;
 private:
+	/// @returns a vector containing the names of the stack components of the variable.
+	std::vector<std::string> stackComponents() const;
+
 	Type const& m_type;
 	std::string m_baseName;
 };

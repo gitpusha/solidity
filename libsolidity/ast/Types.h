@@ -259,13 +259,26 @@ public:
 	/// Returns true if the type can be stored as a value (as opposed to a reference) on the stack,
 	/// i.e. it behaves differently in lvalue context and in value context.
 	virtual bool isValueType() const { return false; }
-	std::vector<std::string> const& stackSlotNames() const
+	std::vector<std::tuple<std::string, TypePointer>> const& stackSlots() const
 	{
-		if (!m_stackSlotNames)
-			m_stackSlotNames = makeStackSlotNames();
-		return *m_stackSlotNames;
+		if (!m_stackSlots)
+			m_stackSlots = makeStackSlots();
+		return *m_stackSlots;
 	}
-	unsigned sizeOnStack() const { return stackSlotNames().size(); }
+	unsigned sizeOnStack() const
+	{
+		if (!m_stackSize)
+		{
+			size_t sizeOnStack = 0;
+			for (auto const& slot: stackSlots())
+				if (std::get<1>(slot))
+					sizeOnStack += std::get<1>(slot)->sizeOnStack();
+				else
+					++sizeOnStack;
+			m_stackSize = sizeOnStack;
+		}
+		return *m_stackSize;
+	}
 	/// If it is possible to initialize such a value in memory by just writing zeros
 	/// of the size memoryHeadSize().
 	virtual bool hasSimpleZeroValueInMemory() const { return true; }
@@ -342,12 +355,16 @@ protected:
 	{
 		return MemberList::MemberMap();
 	}
-	virtual std::vector<std::string> makeStackSlotNames() const { return {{}}; }
+	virtual std::vector<std::tuple<std::string, TypePointer>> makeStackSlots() const
+	{
+		return {std::make_tuple(std::string(), nullptr)};
+	}
 
 
 	/// List of member types (parameterised by scape), will be lazy-initialized.
 	mutable std::map<ContractDefinition const*, std::unique_ptr<MemberList>> m_members;
-	mutable std::optional<std::vector<std::string>> m_stackSlotNames;
+	mutable std::optional<std::vector<std::tuple<std::string, TypePointer>>> m_stackSlots;
+	mutable std::optional<size_t> m_stackSize;
 };
 
 /**
@@ -580,7 +597,7 @@ public:
 	std::string const& value() const { return m_value; }
 
 protected:
-	std::vector<std::string> makeStackSlotNames() const override { return {}; }
+	std::vector<std::tuple<std::string, TypePointer>> makeStackSlots() const override { return {}; }
 private:
 	std::string m_value;
 };
@@ -766,7 +783,7 @@ public:
 	void clearCache() const override;
 
 protected:
-	std::vector<std::string> makeStackSlotNames() const override;
+	std::vector<std::tuple<std::string, TypePointer>> makeStackSlots() const override;
 private:
 	/// String is interpreted as a subtype of Bytes.
 	enum class ArrayKind { Ordinary, Bytes, String };
@@ -807,7 +824,7 @@ public:
 	std::unique_ptr<ReferenceType> copyForLocation(DataLocation, bool) const override { solAssert(false, ""); }
 
 protected:
-	std::vector<std::string> makeStackSlotNames() const override { return {"offset", "length"}; }
+	std::vector<std::tuple<std::string, TypePointer>> makeStackSlots() const override;
 private:
 	ArrayType const& m_arrayType;
 };
@@ -868,13 +885,7 @@ public:
 	/// offsets in storage.
 	std::vector<std::tuple<VariableDeclaration const*, u256, unsigned>> stateVariables() const;
 protected:
-	std::vector<std::string> makeStackSlotNames() const override
-	{
-		if (m_super)
-			return {};
-		else
-			return {{}};
-	}
+	std::vector<std::tuple<std::string, TypePointer>> makeStackSlots() const override;
 private:
 	ContractDefinition const& m_contract;
 	/// If true, this is a special "super" type of m_contract containing only members that m_contract inherited
@@ -1015,7 +1026,7 @@ public:
 	std::vector<TypePointer> const& components() const { return m_components; }
 
 protected:
-	std::vector<std::string> makeStackSlotNames() const override;
+	std::vector<std::tuple<std::string, TypePointer>> makeStackSlots() const override;
 private:
 	std::vector<TypePointer> const m_components;
 };
@@ -1271,7 +1282,7 @@ public:
 	FunctionTypePointer asCallableFunction(bool _inLibrary, bool _bound = false) const;
 
 protected:
-	std::vector<std::string> makeStackSlotNames() const override;
+	std::vector<std::tuple<std::string, TypePointer>> makeStackSlots() const override;
 private:
 	static TypePointers parseElementaryTypeVector(strings const& _types);
 
@@ -1347,7 +1358,7 @@ public:
 
 	BoolResult isExplicitlyConvertibleTo(Type const& _convertTo) const override;
 protected:
-	std::vector<std::string> makeStackSlotNames() const override;
+	std::vector<std::tuple<std::string, TypePointer>> makeStackSlots() const override;
 private:
 	TypePointer m_actualType;
 };
@@ -1373,7 +1384,7 @@ public:
 	std::string toString(bool _short) const override;
 
 protected:
-	std::vector<std::string> makeStackSlotNames() const override { return {}; }
+	std::vector<std::tuple<std::string, TypePointer>> makeStackSlots() const override { return {}; }
 private:
 	TypePointers m_parameterTypes;
 };
@@ -1401,7 +1412,7 @@ public:
 	std::string toString(bool _short) const override;
 
 protected:
-	std::vector<std::string> makeStackSlotNames() const override { return {}; }
+	std::vector<std::tuple<std::string, TypePointer>> makeStackSlots() const override { return {}; }
 private:
 	SourceUnit const& m_sourceUnit;
 };
@@ -1445,7 +1456,7 @@ public:
 	TypePointer typeArgument() const;
 
 protected:
-	std::vector<std::string> makeStackSlotNames() const override { return {}; }
+	std::vector<std::tuple<std::string, TypePointer>> makeStackSlots() const override { return {}; }
 private:
 	Kind m_kind;
 	/// Contract type used for contract metadata magic.

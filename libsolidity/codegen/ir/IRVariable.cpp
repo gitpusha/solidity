@@ -42,24 +42,25 @@ IRVariable::IRVariable(Expression const& _expression):
 {
 }
 
-IRVariable IRVariable::part(std::string const& _slot, Type const& _type) const
+IRVariable IRVariable::part(string const& _slot) const
 {
-	return IRVariable(_type, part(_slot));
-}
-string IRVariable::part(std::string const& _slot) const
-{
-	solAssert(contains(m_type.stackSlotNames(), _slot), "Invalid stack slot name.");
-	if (_slot.empty())
-		return m_baseName;
-	else
-		return m_baseName + '_' + _slot;
+	for (auto const& [slotName, slotType]: m_type.stackSlots())
+		if (slotName == _slot)
+		{
+			solAssert(slotName.empty() || slotType, "");
+			return IRVariable{slotType ? *slotType : m_type, slotName.empty() ? m_baseName : m_baseName + '_' + slotName};
+		}
+	solAssert(false, "Invalid stack slot name.");
 }
 
 vector<string> IRVariable::stackComponents() const
 {
 	vector<string> result;
-	for (auto const& slot: m_type.stackSlotNames())
-		result.emplace_back(part(slot));
+	for (auto const& [slotName, slotType]: m_type.stackSlots())
+		if (slotType)
+			result += part(slotName).stackComponents();
+		else
+			result.emplace_back(slotName.empty() ? m_baseName : m_baseName + '_' + slotName);
 	return result;
 }
 
@@ -70,20 +71,16 @@ string IRVariable::commaSeparatedList() const
 
 string IRVariable::name() const
 {
-	solUnimplementedAssert(m_type.sizeOnStack() == 1, "");
-	auto const& slot = m_type.stackSlotNames().front();
-	if (slot.empty())
+	solAssert(m_type.sizeOnStack() == 1, "");
+	auto const& [slotName, type] = m_type.stackSlots().front();
+	solAssert(!type, "");
+	if (slotName.empty())
 		return m_baseName;
 	else
-		return m_baseName + '_' + slot;
+		return m_baseName + '_' + slotName;
 }
 
 IRVariable IRVariable::tupleComponent(size_t _i) const
 {
-	auto const* tupleType = dynamic_cast<TupleType const*>(&m_type);
-	solAssert(tupleType, "Component of non-tuple requested.");
-	solAssert(_i < tupleType->components().size(), "Invalid tuple component requested.");
-	TypePointer component = tupleType->components().at(_i);
-	solUnimplementedAssert(component, "Placeholder tuple component requested.");
-	return IRVariable(*component, part("component_" + std::to_string(_i + 1)));
+	return part("component_" + std::to_string(_i + 1));
 }

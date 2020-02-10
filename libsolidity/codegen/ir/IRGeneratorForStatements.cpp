@@ -529,9 +529,9 @@ void IRGeneratorForStatements::endVisit(FunctionCall const& _functionCall)
 		vector<string> args;
 		for (unsigned i = 0; i < arguments.size(); ++i)
 			if (functionType->takesArbitraryParameters())
-				args += IRVariable(*arguments[i]).stackComponents();
+				args.emplace_back(IRVariable(*arguments[i]).commaSeparatedList());
 			else
-				args += convert(*arguments[i], *parameterTypes[i]).stackComponents();
+				args.emplace_back(convert(*arguments[i], *parameterTypes[i]).commaSeparatedList());
 
 		if (auto identifier = dynamic_cast<Identifier const*>(&_functionCall.expression()))
 		{
@@ -634,7 +634,7 @@ void IRGeneratorForStatements::endVisit(FunctionCall const& _functionCall)
 
 		m_code << move(requireOrAssertFunction) << "(" << IRVariable(*arguments[0]).name();
 		if (messageArgumentType && messageArgumentType->sizeOnStack() > 0)
-			m_code << ", " << IRVariable(*arguments[1]).name();
+			m_code << ", " << IRVariable(*arguments[1]).commaSeparatedList();
 		m_code << ")\n";
 
 		break;
@@ -748,10 +748,7 @@ void IRGeneratorForStatements::endVisit(MemberAccess const& _memberAccess)
 			else
 				solAssert(false, "Contract member is neither variable nor function.");
 
-			define(IRVariable(_memberAccess).part(
-				"address",
-				type.isPayable() ? *TypeProvider::payableAddress() : *TypeProvider::address()
-			), _memberAccess.expression());
+			define(IRVariable(_memberAccess).part("address"), _memberAccess.expression());
 			define(_memberAccess) << formatNumber(identifier) << "\n";
 		}
 		else
@@ -1195,7 +1192,7 @@ void IRGeneratorForStatements::appendExternalFunctionCall(
 	templ("result", m_context.newYulVariable());
 	templ("freeMem", fetchFreeMem());
 	templ("shl28", m_utils.shiftLeftFunction(8 * (32 - 4)));
-	templ("funId", IRVariable(_functionCall.expression()).part("functionIdentifier"));
+	templ("funId", IRVariable(_functionCall.expression()).part("functionIdentifier").name());
 
 	// If the function takes arbitrary parameters or is a bare call, copy dynamic length data in place.
 	// Move arguments to memory, will not update the free memory pointer (but will update the memory
@@ -1221,7 +1218,7 @@ void IRGeneratorForStatements::appendExternalFunctionCall(
 	else if (useStaticCall)
 		solAssert(!funType.valueSet(), "Value set for staticcall");
 	else if (funType.valueSet())
-		templ("value", IRVariable(_functionCall.expression()).part("value"));
+		templ("value", IRVariable(_functionCall.expression()).part("value").name());
 	else
 		templ("value", "0");
 
@@ -1230,7 +1227,7 @@ void IRGeneratorForStatements::appendExternalFunctionCall(
 	templ("checkExistence", checkExistence);
 
 	if (funType.gasSet())
-		templ("gas", IRVariable(_functionCall.expression()).part("gas"));
+		templ("gas", IRVariable(_functionCall.expression()).part("gas").name());
 	else if (m_context.evmVersion().canOverchargeGasForCall())
 		// Send all gas (requires tangerine whistle EVM)
 		templ("gas", "gas()");
@@ -1308,8 +1305,11 @@ void IRGeneratorForStatements::declareAssign(IRVariable const& _lhs, IRVariable 
 {
 	string output;
 	if (_lhs.type() == _rhs.type())
-		for (auto const& slot: _lhs.type().stackSlotNames())
-			m_code << (_declare ? "let ": "") << _lhs.part(slot) << " := " << _rhs.part(slot) << "\n";
+		for (auto const& [slotName, slotType]: _lhs.type().stackSlots())
+			if (slotType)
+				declareAssign(_lhs.part(slotName), _rhs.part(slotName), _declare);
+			else
+				m_code << (_declare ? "let ": "") << _lhs.part(slotName).name() << " := " << _rhs.part(slotName).name() << "\n";
 	else
 		m_code <<
 				(_declare ? "let ": "") <<
