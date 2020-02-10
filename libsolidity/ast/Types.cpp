@@ -2164,8 +2164,15 @@ TypeResult StructType::interfaceType(bool _inLibrary) const
 
 			Type const* memberType = variable->annotation().type;
 
-			while (dynamic_cast<ArrayType const*>(memberType))
-				memberType = dynamic_cast<ArrayType const*>(memberType)->baseType();
+			while (true)
+			{
+				if (auto const* arrayType = dynamic_cast<ArrayType const*>(memberType))
+					memberType = arrayType->baseType();
+				else if (auto const* mappingType = dynamic_cast<MappingType const*>(memberType))
+					memberType = mappingType->keyType();
+				else
+					break;
+			}
 
 			if (StructType const* innerStruct = dynamic_cast<StructType const*>(memberType))
 				if (
