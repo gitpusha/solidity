@@ -27,6 +27,11 @@ class VariableDeclaration;
 class Type;
 class Expression;
 
+/**
+ * An IRVariable refers to a set of yul variables that correspond to the stack layout of a solidity variable or expression
+ * of a specific solidity type. If the solidity type occupies a single stack slot, the IRVariable refers to a single yul variable.
+ * Otherwise the set of yul variables it refers to is (recursively) determined by ``Type::stackItems()``.
+ */
 class IRVariable
 {
 public:
@@ -43,13 +48,16 @@ public:
 	/// @returns a comma-separated list of the stack components of the variable.
 	std::string commaSeparatedList() const;
 
-	/// @returns a variable referring to the tuple component @a _i of a tuple variable.
+	/// @returns an IRVariable referring to the tuple component @a _i of a tuple variable.
 	IRVariable tupleComponent(std::size_t _i) const;
 
 	/// @returns the type of the variable.
 	Type const& type() const { return m_type; }
 
-	/// @returns a variable referring to the stack component @a _slot of the variable.
+	/// @returns an IRVariable referring to the stack component @a _slot of the variable.
+	/// @a _slot must be among the stack slots in ``m_type.stackItems()``.
+	/// The returned IRVariable is itself typed with the type of the stack slot as defined
+	/// in ``m_type.stackItems()`` and may again occupy multiple stack slots.
 	IRVariable part(std::string const& _slot) const;
 private:
 	/// @returns a vector containing the names of the stack components of the variable.

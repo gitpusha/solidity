@@ -76,6 +76,7 @@ private:
 
 	std::string fetchFreeMem() const;
 
+	/// @returns an IRVariable referring to the value of @a _variable converted to type @a _to.
 	IRVariable convert(IRVariable const& _variable, Type const& _to);
 
 	/// @returns a Yul expression representing the current value of @a _expression,

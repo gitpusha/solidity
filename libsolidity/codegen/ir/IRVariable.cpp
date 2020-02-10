@@ -42,25 +42,28 @@ IRVariable::IRVariable(Expression const& _expression):
 {
 }
 
-IRVariable IRVariable::part(string const& _slot) const
+IRVariable IRVariable::part(string const& _name) const
 {
-	for (auto const& [slotName, slotType]: m_type.stackSlots())
-		if (slotName == _slot)
+	for (auto const& [itemName, itemType]: m_type.stackItems())
+		if (itemName == _name)
 		{
-			solAssert(slotName.empty() || slotType, "");
-			return IRVariable{slotType ? *slotType : m_type, slotName.empty() ? m_baseName : m_baseName + '_' + slotName};
+			solAssert(itemName.empty() || itemType, "");
+			return IRVariable{itemType ? *itemType : m_type, itemName.empty() ? m_baseName : m_baseName + '_' + _name};
 		}
-	solAssert(false, "Invalid stack slot name.");
+	solAssert(false, "Invalid stack item name.");
 }
 
 vector<string> IRVariable::stackComponents() const
 {
 	vector<string> result;
-	for (auto const& [slotName, slotType]: m_type.stackSlots())
-		if (slotType)
-			result += part(slotName).stackComponents();
+	for (auto const& [itemName, itemType]: m_type.stackItems())
+		if (itemType)
+			result += part(itemName).stackComponents();
 		else
-			result.emplace_back(slotName.empty() ? m_baseName : m_baseName + '_' + slotName);
+		{
+			solAssert(itemName.empty(), "");
+			result.emplace_back(itemName.empty() ? m_baseName : m_baseName + '_' + itemName);
+		}
 	return result;
 }
 
@@ -72,12 +75,12 @@ string IRVariable::commaSeparatedList() const
 string IRVariable::name() const
 {
 	solAssert(m_type.sizeOnStack() == 1, "");
-	auto const& [slotName, type] = m_type.stackSlots().front();
+	auto const& [itemName, type] = m_type.stackItems().front();
 	solAssert(!type, "");
-	if (slotName.empty())
+	if (itemName.empty())
 		return m_baseName;
 	else
-		return m_baseName + '_' + slotName;
+		return m_baseName + '_' + itemName;
 }
 
 IRVariable IRVariable::tupleComponent(size_t _i) const

@@ -1305,11 +1305,11 @@ void IRGeneratorForStatements::declareAssign(IRVariable const& _lhs, IRVariable 
 {
 	string output;
 	if (_lhs.type() == _rhs.type())
-		for (auto const& [slotName, slotType]: _lhs.type().stackSlots())
-			if (slotType)
-				declareAssign(_lhs.part(slotName), _rhs.part(slotName), _declare);
+		for (auto const& [stackItemName, stackItemType]: _lhs.type().stackItems())
+			if (stackItemType)
+				declareAssign(_lhs.part(stackItemName), _rhs.part(stackItemName), _declare);
 			else
-				m_code << (_declare ? "let ": "") << _lhs.part(slotName).name() << " := " << _rhs.part(slotName).name() << "\n";
+				m_code << (_declare ? "let ": "") << _lhs.part(stackItemName).name() << " := " << _rhs.part(stackItemName).name() << "\n";
 	else
 		m_code <<
 				(_declare ? "let ": "") <<
