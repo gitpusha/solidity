@@ -73,7 +73,7 @@ private:
 		std::vector<ASTPointer<Expression const>> const& _arguments
 	);
 
-	std::string fetchFreeMem() const;
+	static std::string freeMemoryPointer();
 
 	/// @returns a Yul expression representing the current value of @a _expression,
 	/// converted to type @a _to if it does not yet have that type.
