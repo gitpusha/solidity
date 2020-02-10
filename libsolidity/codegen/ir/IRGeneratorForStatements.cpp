@@ -1171,14 +1171,18 @@ void IRGeneratorForStatements::appendExternalFunctionCall(
 				<retSize>
 			</dynamicReturnSize>
 		)
-		if iszero(<result>) { <forwardingRevert>() }
+		<?isTryCall>
+			let <trySuccessConditionVariable> := <result>
+		<!isTryCall>
+			if iszero(<result>) { <forwardingRevert>() }
 
-		<?dynamicReturnSize>
-			returndatacopy(<pos>, 0, returndatasize())
-		</dynamicReturnSize>
+			<?dynamicReturnSize>
+				returndatacopy(<pos>, 0, returndatasize())
+			</dynamicReturnSize>
 
-		mstore(<freeMemoryPointer>, add(<pos>, and(add(<retSize>, 0x1f), not(0x1f))))
-		<?returns> let <retVars> := </returns> <abiDecode>(<pos>, add(<pos>, <retSize>))
+			mstore(<freeMemoryPointer>, add(<pos>, and(add(<retSize>, 0x1f), not(0x1f))))
+			<?returns> let <retVars> := </returns> <abiDecode>(<pos>, add(<pos>, <retSize>))
+		</isTryCall>
 	)");
 	templ("pos", m_context.newYulVariable());
 	templ("end", m_context.newYulVariable());
@@ -1187,6 +1191,10 @@ void IRGeneratorForStatements::appendExternalFunctionCall(
 	templ("shl28", m_utils.shiftLeftFunction(8 * (32 - 4)));
 	templ("funId", m_context.variablePart(_functionCall.expression(), "functionIdentifier"));
 	templ("address", m_context.variablePart(_functionCall.expression(), "address"));
+
+	templ("isTryCall", _functionCall.annotation().tryCall);
+	if (_functionCall.annotation().tryCall)
+		templ("trySuccessConditionVariable", m_context.trySuccessConditionVariable(_functionCall));
 
 	// If the function takes arbitrary parameters or is a bare call, copy dynamic length data in place.
 	// Move arguments to memory, will not update the free memory pointer (but will update the memory
@@ -1448,4 +1456,156 @@ Type const& IRGeneratorForStatements::type(Expression const& _expression)
 {
 	solAssert(_expression.annotation().type, "Type of expression not set.");
 	return *_expression.annotation().type;
+}
+
+/// TODO
+/// - sowohl die success condition als auch die eig. return values extrahieren, aus
+/// appendExternalFunctionCall()
+/// -
+bool IRGeneratorForStatements::visit(TryStatement const& _tryStatement)
+{
+	_tryStatement.externalCall().accept(*this);
+
+	auto const trySuccessCondition = m_context.trySuccessConditionVariable(_tryStatement.externalCall());
+
+	m_code << "switch iszero(" << trySuccessCondition << ")\n";
+
+	m_code << "case 0 {\n";
+	_tryStatement.clauses().front()->accept(*this);
+	m_code << "}\n";
+
+	m_code << "default {\n";
+	handleCatch(_tryStatement.clauses());
+	m_code << "}\n";
+
+	return false;
+}
+
+inline auto extractCatchClauses(vector<ASTPointer<TryCatchClause>> const& _catchClauses)
+{
+	ASTPointer<TryCatchClause> structured{};
+	ASTPointer<TryCatchClause> fallback{};
+
+	for (size_t i = 1; i < _catchClauses.size(); ++i)
+		if (_catchClauses[i]->errorName() == "Error")
+			structured = _catchClauses[i];
+		else if (_catchClauses[i]->errorName().empty())
+			fallback = _catchClauses[i];
+		else
+			solAssert(false, "");
+
+	solAssert(_catchClauses.size() == size_t(1 + (structured ? 1 : 0) + (fallback ? 1 : 0)), "");
+
+	return tuple{structured, fallback};
+}
+
+void IRGeneratorForStatements::handleCatch(vector<ASTPointer<TryCatchClause>> const& _catchClauses)
+{
+	auto const [structured, fallback] = extractCatchClauses(_catchClauses);
+
+	if (structured)
+	{
+		solAssert(
+			structured->parameters() &&
+			structured->parameters()->parameters().size() == 1 &&
+			structured->parameters()->parameters().front() &&
+			*structured->parameters()->parameters().front()->annotation().type == *TypeProvider::stringMemory(),
+			""
+		);
+		solAssert(m_context.evmVersion().supportsReturndata(), "");
+
+		string const errorHash = FixedHash<4>(util::keccak256("Error(string)")).hex();
+
+		// Try to decode the error message.
+		// If this fails, leaves 0 on the stack, otherwise the pointer to the data string.
+		string const dataVariable = m_context.newYulVariable();
+		string const tryDecodeErrorMessage =
+			util::Whiskers(R"(
+				// try decoding the error message into <data>
+				let <data> := mload(0x40)
+				mstore(<data>, 0)
+				for {} 1 {} {
+					if lt(returndatasize(), 0x44) { <data> := 0 break }
+					returndatacopy(0, 0, 4)
+					let sig := <getSig>
+					if iszero(eq(sig, 0x<ErrorSignature>)) { <data> := 0 break }
+					returndatacopy(<data>, 4, sub(returndatasize(), 4))
+					let offset := mload(<data>)
+					if or(
+						gt(offset, 0xffffffffffffffff),
+						gt(add(offset, 0x24), returndatasize())
+					) {
+						<data> := 0
+						break
+					}
+					let msg := add(<data>, offset)
+					let length := mload(msg)
+					if gt(length, 0xffffffffffffffff) { <data> := 0 break }
+					let end := add(add(msg, 0x20), length)
+					if gt(end, add(<data>, returndatasize())) { <data> := 0 break }
+					mstore(0x40, and(add(end, 0x1f), not(0x1f)))
+					<data> := msg
+					break
+				}
+			)")
+			("ErrorSignature", errorHash)
+			("data", dataVariable)
+			("getSig",
+				m_context.evmVersion().hasBitwiseShifting() ?
+				"shr(224, mload(0))" :
+				"div(mload(0), " + (u256(1) << 224).str() + ")"
+			).render();
+
+		m_code << tryDecodeErrorMessage;
+		m_code << "switch iszero(" << dataVariable << ") \n";
+		m_code << "case 0 { // decoding success\n";
+		structured->accept(*this);       // decoding success
+		m_code << "}\n";
+		m_code << "default { // decoding failure\n";
+		handleCatchFallback(fallback);   // decoding failure
+		m_code << "}\n";
+	}
+	else
+	{
+		m_code << "// fallback\n";
+		handleCatchFallback(fallback);
+	}
+}
+
+void IRGeneratorForStatements::handleCatchFallback(ASTPointer<TryCatchClause> _fallback)
+{
+	if (_fallback)
+	{
+		if (_fallback->parameters())
+		{
+			solAssert(m_context.evmVersion().supportsReturndata(), "");
+			solAssert(
+				_fallback->parameters()->parameters().size() == 1 &&
+				_fallback->parameters()->parameters().front() &&
+				*_fallback->parameters()->parameters().front()->annotation().type == *TypeProvider::bytesMemory(),
+				""
+			);
+			m_code << "let " << m_context.addLocalVariable(*_fallback->parameters()->parameters().front())
+				   << " := " << m_utils.returnDataToArrayFunction() << "()\n";
+		}
+
+		_fallback->accept(*this);
+	}
+	else
+	{
+		// re-throw
+		if (m_context.evmVersion().supportsReturndata())
+			m_code << R"({
+				returndatacopy(0, 0, returndatasize())
+				revert(0, returndatasize())
+			})";
+		else
+			m_code << "revert(0, 0)\n";
+	}
+}
+
+bool IRGeneratorForStatements::visit(TryCatchClause const& _clause)
+{
+	(void) _clause;
+	return true; // TODO
 }

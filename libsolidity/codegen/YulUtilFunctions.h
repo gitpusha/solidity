@@ -281,6 +281,9 @@ public:
 	/// zero
 	/// signature: (slot, offset) ->
 	std::string storageSetToZeroFunction(Type const& _type);
+
+	std::string returnDataToArrayFunction();
+
 private:
 	/// Special case of conversionFunction - handles everything that does not
 	/// use exactly one variable to hold the value.

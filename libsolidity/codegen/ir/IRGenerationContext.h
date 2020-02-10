@@ -83,7 +83,7 @@ public:
 	/// the value of the given expression.
 	std::string variable(Expression const& _expression);
 	/// @returns the sub-variable of a multi-variable expression.
-	std::string variablePart(Expression const& _expression, std::string const& _part);
+	std::string variablePart(Expression const& _expression, std::string const& _part) const;
 
 	std::string internalDispatch(size_t _in, size_t _out);
 
@@ -91,6 +91,8 @@ public:
 	YulUtilFunctions utils();
 
 	langutil::EVMVersion evmVersion() const { return m_evmVersion; };
+
+	std::string trySuccessConditionVariable(Expression const& _expression) const;
 
 private:
 	langutil::EVMVersion m_evmVersion;

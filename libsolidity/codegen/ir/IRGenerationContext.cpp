@@ -108,7 +108,17 @@ string IRGenerationContext::variable(Expression const& _expression)
 		return suffixedVariableNameList(move(var) + "_", 1, 1 + size);
 }
 
-string IRGenerationContext::variablePart(Expression const& _expression, string const& _part)
+string IRGenerationContext::trySuccessConditionVariable(Expression const& _expression) const
+{
+	solAssert(
+		dynamic_cast<FunctionCallAnnotation const*>(&_expression.annotation()) &&
+		static_cast<FunctionCallAnnotation const*>(&_expression.annotation())->tryCall,
+		"Parameter must be a FunctionCall with tryCall-annotation set.");
+
+	return "expr_" + to_string(_expression.id()) + "_trySuccessCondition";
+}
+
+string IRGenerationContext::variablePart(Expression const& _expression, string const& _part) const
 {
 	size_t numVars = _expression.annotation().type->sizeOnStack();
 	solAssert(numVars > 1, "");
@@ -163,3 +173,4 @@ YulUtilFunctions IRGenerationContext::utils()
 {
 	return YulUtilFunctions(m_evmVersion, m_functions);
 }
+
